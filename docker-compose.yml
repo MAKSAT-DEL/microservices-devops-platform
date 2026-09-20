@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------
+  # AUTH SERVICE & DB
+  # ---------------------------------------------------
+  auth-db:
+    image: postgres:16-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_pgdata:/var/lib/postgresql/data
+
+  authservice:
+    build:
+      context: ./services/AuthService
+      dockerfile: Dockerfile
+    container_name: authservice
+    ports:
+      - "8080:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=auth-db;Database=authdb;Username=postgres;Password=postgrespassword
+    depends_on:
+      - auth-db
+
+  # ---------------------------------------------------
+  # PRODUCT SERVICE & DB
+  # ---------------------------------------------------
+  product-db:
+    image: postgres:16-alpine
+    container_name: product-db
+    environment:
+      POSTGRES_DB: productdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5433:5432"  # Dışarıya 5433 portundan açıyoruz ki 5432 ile çakışmasın
+    volumes:
+      - product_pgdata:/var/lib/postgresql/data
+
+  productservice:
+    build:
+      context: ./services/ProductService
+      dockerfile: Dockerfile
+    container_name: productservice
+    ports:
+      - "8081:8080"  # AuthService 8080'deyken ProductService 8081'de çalışacak
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=product-db;Database=productdb;Username=postgres;Password=postgrespassword
+    depends_on:
+      - product-db
+
+volumes:
+  auth_pgdata:
+  product_pgdata:

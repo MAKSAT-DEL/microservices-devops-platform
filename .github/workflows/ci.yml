@@ -1,4 +1,4 @@
-name: CI - Build & Test Microservices
+name: CI/CD - Build, Test & Push Microservices
 
 on:
   push:
@@ -7,9 +7,13 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write   # GHCR'e push izni
+
 jobs:
   build:
-    name: Build ${{ matrix.service }}
+    name: Build & Push ${{ matrix.service }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -42,12 +46,25 @@ jobs:
         run: dotnet test --configuration Release --no-build --verbosity normal
         continue-on-error: true
 
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Build Docker image
         working-directory: ./services/${{ matrix.dir }}
-        run: docker build -t ${{ matrix.service }}:${{ github.sha }} .
-
-      - name: Tag image
         run: |
-          echo "Image built: ${{ matrix.service }}:${{ github.sha }}"
-          echo "Service: ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
-          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}"
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          docker build -t $IMAGE_NAME:${{ github.sha }} -t $IMAGE_NAME:latest .
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+
+      - name: Push to GHCR
+        run: |
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:latest
+
+      - name: Summary
+        run: |
+          echo "## 🐳 Image Pushed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service:** ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image:** \`$IMAGE_NAME:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest:** \`$IMAGE_NAME:latest\`" >> $GITHUB_STEP_SUMMARY

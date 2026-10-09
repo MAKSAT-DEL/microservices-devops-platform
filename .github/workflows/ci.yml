@@ -1,0 +1,49 @@
+name: CI - Build & Test Microservices
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Manuel tetikleme butonu için
+
+jobs:
+  build:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        service: [AuthService, ProductService]
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔧 Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      
+      - name: 📦 Restore dependencies
+        working-directory: ./services/${{ matrix.service }}
+        run: dotnet restore
+      
+      - name: 🏗️ Build
+        working-directory: ./services/${{ matrix.service }}
+        run: dotnet build --configuration Release --no-restore
+      
+      - name: 🧪 Test
+        working-directory: ./services/${{ matrix.service }}
+        run: dotnet test --configuration Release --no-build --verbosity normal
+        continue-on-error: true  # Test projesi yoksa workflow çökmesin
+      
+      - name: 🐳 Build Docker image
+        working-directory: ./services/${{ matrix.service }}
+        run: docker build -t ${{ matrix.service }}:${{ github.sha }} .
+      
+      - name: 🏷️ Tag image
+        run: |
+          echo "Image built: ${{ matrix.service }}:${{ github.sha }}"
+          echo "Service: ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

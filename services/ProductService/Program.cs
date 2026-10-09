@@ -4,8 +4,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ProductService.Data;
 using Scalar.AspNetCore;
+using Prometheus;
+using OpenTelemetry;
+using OpenTelemetry.Trace;                     
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddOtlpExporter());
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -29,6 +37,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 var app = builder.Build();
 
+// OBSERVABILITY 
+app.UseMetricServer();                   
+app.UseHttpMetrics();                      
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
@@ -42,7 +54,7 @@ app.MapScalarApiReference(options =>
            .WithTheme(ScalarTheme.Purple);
 });
 
-app.UseAuthentication();
+app.UseAuthentication();                
 app.UseAuthorization();
 
 app.MapControllers();

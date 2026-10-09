@@ -1,9 +1,4 @@
-version: '3.8'
-
 services:
-  # ---------------------------------------------------
-  # AUTH SERVICE & DB
-  # ---------------------------------------------------
   auth-db:
     image: postgres:16-alpine
     container_name: auth-db
@@ -25,6 +20,8 @@ services:
       - "8080:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Host=auth-db;Database=authdb;Username=postgres;Password=postgrespassword
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
+      - OTEL_SERVICE_NAME=authservice
     depends_on:
       - auth-db
 
@@ -39,7 +36,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
     ports:
-      - "5433:5432"  # Dışarıya 5433 portundan açıyoruz ki 5432 ile çakışmasın
+      - "5433:5432"  
     volumes:
       - product_pgdata:/var/lib/postgresql/data
 
@@ -49,12 +46,77 @@ services:
       dockerfile: Dockerfile
     container_name: productservice
     ports:
-      - "8081:8080"  # AuthService 8080'deyken ProductService 8081'de çalışacak
+      - "8081:8080"  
     environment:
       - ConnectionStrings__DefaultConnection=Host=product-db;Database=productdb;Username=postgres;Password=postgrespassword
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
+      - OTEL_SERVICE_NAME=productservice
     depends_on:
       - product-db
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"  
+    volumes:
+      - ./monitoring:/etc/prometheus   
+    depends_on:
+      - authservice
+      - productservice   
+    networks:
+      - default  
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"                         
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin         
+      - GF_SECURITY_ADMIN_PASSWORD=admin123  
+    volumes:
+      - grafana_data:/var/lib/grafana        
+    depends_on:
+      - prometheus                          
+    networks:
+      - default 
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+    networks:
+      - default
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks:
+      - default   
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: -config.file=/etc/tempo/tempo.yml
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./monitoring/tempo-config.yml:/etc/tempo/tempo.yml
+    networks:
+      - default                                
 
 volumes:
   auth_pgdata:
   product_pgdata:
+  grafana_data:

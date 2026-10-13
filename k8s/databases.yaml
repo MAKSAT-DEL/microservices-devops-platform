@@ -38,3 +38,44 @@ spec:
   ports:
     - port: 5432          # Servisin dışarıdan (cluster içinden) baktığı port
       targetPort: 5432    # Pod'un içindeki gerçek port
+
+---
+# --- PRODUCT DB DEPLOYMENT ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-db        # ⚠️ İsim tam olarak böyle olmalı (DNS için kritik)
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-db     # Label da birebir aynı olmalı
+  template:
+    metadata:
+      labels:
+        app: product-db   # Ve burası da aynı
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_DB
+              value: productdb    # Authdb ile karıştırma!
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgrespassword
+          ports:
+            - containerPort: 5432
+---
+# --- PRODUCT DB SERVICE ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-db        # Init container'ın 'nc -z product-db' komutu bunu bulacak
+spec:
+  selector:
+    app: product-db       # Deployment'un label'ıyla eşleşmeli
+  ports:
+    - port: 5432
+      targetPort: 5432

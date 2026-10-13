@@ -1,30 +1,30 @@
-# --- PRODUCT SERVICE DEPLOYMENT ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: productservice        # Cluster içindeki ismi
+  name: productservice
 spec:
-  replicas: 2                 # ⚡ Yüksek erişilebilirlik için yine 2 kopya!
+  replicas: 2
   selector:
     matchLabels:
-      app: productservice     # Hangi etiketli pod'u yönetecek?
+      app: productservice
   template:
     metadata:
       labels:
-        app: productservice   # Pod'a bu etiketi yapıştır
+        app: productservice
     spec:
+      initContainers:              # ← BURAYA EKLEDİK
+        - name: wait-for-postgres
+          image: busybox:1.35
+          command: ['sh', '-c', 'until nc -z product-db 5432; do echo waiting for db; sleep 2; done;']
       containers:
         - name: productservice
-          # 👇 BURASI KRİTİK: GHCR'deki ürün servisi imajı!
           image: ghcr.io/maksat-del/productservice:latest 
           env:
             - name: ConnectionStrings__DefaultConnection
-              # Host kısmında 'product-db' yazıyor çünkü databases.yaml'da Service adını öyle verdik.
-              # Kubernetes DNS otomatik çözer.
               value: Host=product-db;Database=productdb;Username=postgres;Password=postgrespassword
           ports:
             - containerPort: 8080
-
+# ... Service kısmı değişmedi ...
 ---
 # --- PRODUCT SERVICE NETWORKING ---
 apiVersion: v1

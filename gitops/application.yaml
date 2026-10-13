@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1   # ArgoCD'ye özel API
+kind: Application                  # Tür: Bir uygulama tanımı
+metadata:
+  name: microservices-stack        # UI'da görünecek isim
+  namespace: argocd                # ArgoCD kendi namespace'inde barındırır
+spec:
+  project: default                 # Basit proje grubu
+  
+  source:                          # 📦 KAYNAK NEREDE?
+    repoURL: https://github.com/MAKSAT-DEL/microservices-devops-platform.git
+    targetRevision: main           # Hangi branch'i izlesin?
+    path: k8s                      # Repo'nun hangi klasöründeki YAML'ları okusun?
+  
+  destination:                     # 🎯 HEDEF NEREYE?
+    server: https://kubernetes.default.svc  # Kendi cluster'ımız (In-cluster)
+    namespace: microservices       # Tüm kaynaklar bu NS'e düşsün (izolasyon için iyi pratik)
+  
+  syncPolicy:                      # 🔄 SENKRONİZASYON POLİTİKASI
+    automated:
+      prune: true                  # Git'ten silineni Cluster'dan da sil (Temizlik)
+      selfHeal: true               # Biri elle değiştirdiyse Git'e geri döndür (Drift Fix)
+    syncOptions:
+      - CreateNamespace=true       # 'microservices' NS yoksa yarat

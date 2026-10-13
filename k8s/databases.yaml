@@ -1,0 +1,40 @@
+# --- AUTH DB DEPLOYMENT ---
+apiVersion: apps/v1       # Kubernetes API versiyonu (Apps grubu)
+kind: Deployment          # Tür: Pod'ları yöneten kontrolcü
+metadata:
+  name: auth-db           # Cluster içindeki ismi (DNS olarak kullanılacak)
+spec:
+  replicas: 1             # Sadece 1 tane olsun (Veritabanı genelde stateful olduğu için tek tutulur)
+  selector:
+    matchLabels:
+      app: auth-db        # Hangi etiketli pod'u yönetecek?
+  template:               # Yeni doğacak pod'un şablonu
+    metadata:
+      labels:
+        app: auth-db      # Pod'a bu etiketi yapıştır ki Deployment onu bulsun
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine  # Docker Hub'dan çek
+          env:                       # Ortam değişkenleri (Config map yerine basitlik için direkt buraya)
+            - name: POSTGRES_DB
+              value: authdb
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgrespassword
+          ports:
+            - containerPort: 5432    # Container içinde dinlenecek port
+
+---
+# --- AUTH DB SERVICE ---
+apiVersion: v1            # Core grup
+kind: Service             # Tür: Ağ erişimi sağlayıcı (LoadBalancer değil, ClusterIP default)
+metadata:
+  name: auth-db           # DNS ismi: auth-db.microservices.svc.cluster.local olacak
+spec:
+  selector:
+    app: auth-db          # Yukarıdaki etikete sahip pod'lara trafik yönlendir
+  ports:
+    - port: 5432          # Servisin dışarıdan (cluster içinden) baktığı port
+      targetPort: 5432    # Pod'un içindeki gerçek port

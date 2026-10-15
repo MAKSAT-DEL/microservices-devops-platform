@@ -1,70 +1,75 @@
 # --- AUTH DB DEPLOYMENT ---
-apiVersion: apps/v1       # Kubernetes API versiyonu (Apps grubu)
-kind: Deployment          # Tür: Pod'ları yöneten kontrolcü
-metadata:
-  name: auth-db           # Cluster içindeki ismi (DNS olarak kullanılacak)
-spec:
-  replicas: 1             # Sadece 1 tane olsun (Veritabanı genelde stateful olduğu için tek tutulur)
-  selector:
-    matchLabels:
-      app: auth-db        # Hangi etiketli pod'u yönetecek?
-  template:               # Yeni doğacak pod'un şablonu
-    metadata:
-      labels:
-        app: auth-db      # Pod'a bu etiketi yapıştır ki Deployment onu bulsun
-    spec:
-      containers:
-        - name: postgres
-          image: postgres:16-alpine  # Docker Hub'dan çek
-          env:                       # Ortam değişkenleri (Config map yerine basitlik için direkt buraya)
-            - name: POSTGRES_DB
-              value: authdb
-            - name: POSTGRES_USER
-              value: postgres
-            - name: POSTGRES_PASSWORD
-              value: postgrespassword
-          ports:
-            - containerPort: 5432    # Container içinde dinlenecek port
-
----
-# --- AUTH DB SERVICE ---
-apiVersion: v1            # Core grup
-kind: Service             # Tür: Ağ erişimi sağlayıcı (LoadBalancer değil, ClusterIP default)
-metadata:
-  name: auth-db           # DNS ismi: auth-db.microservices.svc.cluster.local olacak
-spec:
-  selector:
-    app: auth-db          # Yukarıdaki etikete sahip pod'lara trafik yönlendir
-  ports:
-    - port: 5432          # Servisin dışarıdan (cluster içinden) baktığı port
-      targetPort: 5432    # Pod'un içindeki gerçek port
-
----
-# --- PRODUCT DB DEPLOYMENT ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: product-db        # ⚠️ İsim tam olarak böyle olmalı (DNS için kritik)
+  name: auth-db
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: product-db     # Label da birebir aynı olmalı
+      app: auth-db
   template:
     metadata:
       labels:
-        app: product-db   # Ve burası da aynı
+        app: auth-db
     spec:
       containers:
         - name: postgres
           image: postgres:16-alpine
           env:
             - name: POSTGRES_DB
-              value: productdb    # Authdb ile karıştırma!
+              value: authdb
             - name: POSTGRES_USER
               value: postgres
             - name: POSTGRES_PASSWORD
-              value: postgrespassword
+              valueFrom:
+                secretKeyRef:
+                  name: auth-db-secret
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 5432
+---
+# --- AUTH DB SERVICE ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-db
+spec:
+  selector:
+    app: auth-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+# --- PRODUCT DB DEPLOYMENT ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-db
+  template:
+    metadata:
+      labels:
+        app: product-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_DB
+              value: productdb
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:               # <-- BURASI DA DÜZELTİLDİ
+                secretKeyRef:
+                  name: product-db-secret # <-- YENİ SECRET ADI
+                  key: POSTGRES_PASSWORD
           ports:
             - containerPort: 5432
 ---
@@ -72,10 +77,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: product-db        # Init container'ın 'nc -z product-db' komutu bunu bulacak
+  name: product-db
 spec:
   selector:
-    app: product-db       # Deployment'un label'ıyla eşleşmeli
+    app: product-db
   ports:
     - port: 5432
       targetPort: 5432
